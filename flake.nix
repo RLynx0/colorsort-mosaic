@@ -6,22 +6,25 @@
     fenix.url = "github:nix-community/fenix";
   };
 
-  outputs = {
-    self,
-    flake-utils,
-    naersk,
-    nixpkgs,
-    fenix,
-  }:
+  outputs =
+    {
+      flake-utils,
+      naersk,
+      nixpkgs,
+      fenix,
+      ...
+    }:
     flake-utils.lib.eachDefaultSystem (
-      system: let
+      system:
+      let
         pkgs = (import nixpkgs) {
           inherit system;
-          overlays = [fenix.overlays.default];
+          overlays = [ fenix.overlays.default ];
         };
 
-        naersk' = pkgs.callPackage naersk {};
-      in rec {
+        naersk' = pkgs.callPackage naersk { };
+      in
+      {
         defaultPackage = naersk'.buildPackage {
           src = ./.;
         };
