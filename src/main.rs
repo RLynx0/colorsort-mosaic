@@ -1,4 +1,7 @@
-use std::fs;
+use std::{
+    fs,
+    io::{Write, stdout},
+};
 
 use image::ImageReader;
 
@@ -7,7 +10,9 @@ fn main() -> anyhow::Result<()> {
         let p = p?.path();
         let image = ImageReader::open(&p)?.with_guessed_format()?.decode()?;
         let dimension = image.width().max(image.height());
-        println!("{p:?} : {dimension}");
+        print!("\r{p:?} : {dimension}\x1B[K");
+        stdout().flush()?;
     }
+    println!();
     Ok(())
 }
