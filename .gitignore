@@ -1,6 +1,5 @@
-mosaic.png
 target/
-output/
+*.png
 img/
 
 # Nix
@@ -9,4 +8,3 @@ result-*
 
 # Misc
 .direnv
-img
