@@ -117,7 +117,7 @@ fn auction_assign(tiles: &[Tile], cells: &[Cell]) -> Vec<usize> {
     let mut assignment = vec![None; n];
     let mut cell_owner = vec![None; cells.len()];
 
-    let epsilon = 0.01;
+    let epsilon = 0.005;
     let mut unassigned: Vec<usize> = (0..n).collect();
 
     while let Some(i) = unassigned.pop() {
