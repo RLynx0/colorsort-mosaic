@@ -1,4 +1,5 @@
 use std::{
+    env::args,
     fs::{self, DirEntry},
     io::{Write, stdout},
 };
@@ -10,7 +11,8 @@ const CLEAR_LINE: &str = "\x1b[K";
 const IMG_SIZE: u32 = 100;
 
 fn main() -> anyhow::Result<()> {
-    let dir_entries = fs::read_dir("./img")?.collect::<Result<Vec<_>, _>>()?;
+    let path = args().skip(1).next().unwrap_or(String::from("./img"));
+    let dir_entries = fs::read_dir(path)?.collect::<Result<Vec<_>, _>>()?;
     let process_results = dir_entries.par_iter().map(process_dir_entry);
     let processed_images = process_results.collect::<Result<Vec<_>, _>>()?;
     println!("\r{CLEAR_LINE}Processed {} images", processed_images.len());
