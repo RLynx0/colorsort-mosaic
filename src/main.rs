@@ -10,7 +10,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 const OUTPUT_PATH: &str = "mosaic.png";
 const CLEAR_LINE: &str = "\x1b[K";
-const TILE_SIZE: u32 = 100;
+const TILE_SIZE: u32 = 50;
 
 fn main() -> Result<()> {
     let img_dir = args().skip(1).next().unwrap_or(String::from("./img"));
