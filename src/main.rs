@@ -76,10 +76,7 @@ struct Cell {
 
 fn build_mosaic(mut tiles: Vec<Tile>) -> Result<()> {
     tiles.sort_by(|a, b| a.light.partial_cmp(&b.light).unwrap());
-
-    let count = tiles.len() as u32;
-    let width_tiles = (count as f32).sqrt().ceil() as u32;
-    let height_tiles = width_tiles;
+    let (width_tiles, height_tiles) = find_grid(tiles.len() as u32);
 
     let width_px = width_tiles * TILE_SIZE;
     let height_px = height_tiles * TILE_SIZE;
@@ -109,6 +106,31 @@ fn build_mosaic(mut tiles: Vec<Tile>) -> Result<()> {
     println!("Saved {OUTPUT_PATH}");
 
     Ok(())
+}
+
+fn find_grid(n: u32) -> (u32, u32) {
+    let mut best_w = n;
+    let mut best_h = 1;
+    let mut best_score = f32::INFINITY;
+    let sqrt = (n as f32).sqrt() as u32;
+
+    for w in 1..=sqrt * 2 {
+        let h = (n + w - 1) / w;
+        let area = w * h;
+        let waste = (area - n) as f32;
+
+        let aspect = w as f32 / h as f32;
+        let aspect_penalty = (aspect.ln()).abs(); // prefers ~1.0
+        let score = waste * 2.0 + aspect_penalty * 10.0;
+
+        if score < best_score {
+            best_score = score;
+            best_w = w;
+            best_h = h;
+        }
+    }
+
+    (best_w, best_h)
 }
 
 fn auction_assign(tiles: &[Tile], cells: &[Cell]) -> Vec<usize> {
