@@ -50,13 +50,11 @@ fn build_mosaic(squares: Vec<(DynamicImage, Rgba<u8>)>) -> Result<()> {
 
     let width_px = width_tiles * TILE_SIZE;
     let height_px = height_tiles * TILE_SIZE;
-
     let mut canvas = image::RgbaImage::new(width_px, height_px);
     let mut occupied = vec![false; (width_tiles * height_tiles) as usize];
 
     for (img, rgba) in squares {
         let (h, _s, l) = rgb_to_hsl(rgba[0], rgba[1], rgba[2]);
-
         let x = ((h / 360.0) * (width_tiles as f32 - 1.0)).round() as i32;
         let y = (l * (height_tiles as f32 - 1.0)).round() as i32;
 
