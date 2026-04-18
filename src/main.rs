@@ -134,5 +134,5 @@ fn dist(a_h: f32, a_l: f32, b_h: f32, b_l: f32) -> f32 {
     let dh = (a_h - b_h).abs();
     let dh = dh.min(1.0 - dh);
     let dl = a_l - b_l;
-    dh * dh + dl * dl
+    dh * dh * 2.0 + dl * dl
 }
