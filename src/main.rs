@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::Result;
-use image::{DynamicImage, GenericImageView, ImageReader, Rgba, imageops::FilterType};
+use image::{DynamicImage, GenericImageView, ImageReader, imageops::FilterType};
 use palette::{FromColor, Lab, Srgb};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
@@ -15,7 +15,7 @@ const CLEAR_LINE: &str = "\x1b[K";
 const TILE_SIZE: u32 = 50;
 
 fn main() -> Result<()> {
-    let img_dir = args().skip(1).next().unwrap_or(String::from("./img"));
+    let img_dir = args().nth(1).unwrap_or(String::from("./img"));
     let dir_entries = fs::read_dir(img_dir)?.collect::<Result<Vec<_>, _>>()?;
     let process_results = dir_entries.par_iter().map(process_dir_entry);
     let processed_images = process_results.collect::<Result<Vec<_>, _>>()?;
@@ -23,7 +23,13 @@ fn main() -> Result<()> {
     build_mosaic(processed_images)
 }
 
-fn process_dir_entry(entry: &DirEntry) -> Result<(DynamicImage, Lab)> {
+struct Tile {
+    image: DynamicImage,
+    light: f32,
+    hue: f32,
+}
+
+fn process_dir_entry(entry: &DirEntry) -> Result<Tile> {
     let path = entry.path();
     let image = ImageReader::open(&path)?.with_guessed_format()?.decode()?;
     let (width, height) = image.dimensions();
@@ -39,19 +45,22 @@ fn process_dir_entry(entry: &DirEntry) -> Result<(DynamicImage, Lab)> {
 
     let single_pixel = scaled.resize_exact(1, 1, FilterType::Lanczos3);
     let (_, _, rgba) = single_pixel.pixels().next().unwrap();
-    print!("\r{path:?} : value {rgba:?}{CLEAR_LINE}");
-    stdout().flush()?;
-
     let lab = Lab::from_color(Srgb::new(
         rgba[0] as f32 / 255.0,
         rgba[1] as f32 / 255.0,
         rgba[2] as f32 / 255.0,
     ));
 
-    Ok((scaled, lab))
+    let light = lab.l / 100.0;
+    let hue_radians = lab.b.atan2(lab.a);
+    let hue = (hue_radians + PI) / (2.0 * PI);
+    print!("\r{path:?} : hue:{hue} light:{light}{CLEAR_LINE}");
+    stdout().flush()?;
+
+    Ok(Tile { image, light, hue })
 }
 
-fn build_mosaic(squares: Vec<(DynamicImage, Lab)>) -> Result<()> {
+fn build_mosaic(squares: Vec<Tile>) -> Result<()> {
     let count = squares.len() as u32;
     let width_tiles = (count as f32).sqrt().ceil() as u32;
     let height_tiles = width_tiles;
@@ -64,11 +73,4 @@ fn build_mosaic(squares: Vec<(DynamicImage, Lab)>) -> Result<()> {
     println!("Saved {OUTPUT_PATH}");
 
     Ok(())
-}
-
-fn lab_to_angle_distance(lab: Lab) -> (f32, f32) {
-    let hue = lab.b.atan2(lab.a); // -pi..pi
-    let hue_norm = (hue + PI) / (2.0 * PI);
-    let light = lab.l / 100.0;
-    (hue_norm, light)
 }
