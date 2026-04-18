@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::Result;
-use image::{DynamicImage, GenericImageView, ImageReader, imageops::FilterType};
+use image::{DynamicImage, GenericImageView, ImageReader, Rgba, imageops::FilterType};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 const CLEAR_LINE: &str = "\x1b[K";
@@ -20,7 +20,7 @@ fn main() -> Result<()> {
     build_mosaic(processed_images)
 }
 
-fn process_dir_entry(entry: &DirEntry) -> Result<DynamicImage> {
+fn process_dir_entry(entry: &DirEntry) -> Result<(DynamicImage, Rgba<u8>)> {
     let path = entry.path();
     let image = ImageReader::open(&path)?.with_guessed_format()?.decode()?;
     let (width, height) = image.dimensions();
@@ -34,12 +34,17 @@ fn process_dir_entry(entry: &DirEntry) -> Result<DynamicImage> {
     print!("\r{path:?} : scaled to {TILE_SIZE}x{TILE_SIZE}{CLEAR_LINE}");
     stdout().flush()?;
 
-    Ok(scaled)
+    let single_pixel = scaled.resize_exact(1, 1, FilterType::Lanczos3);
+    let (_, _, rgba) = single_pixel.pixels().next().unwrap();
+    print!("\r{path:?} : value {rgba:?}{CLEAR_LINE}");
+    stdout().flush()?;
+
+    Ok((scaled, rgba))
 }
 
-fn build_mosaic(squares: Vec<DynamicImage>) -> Result<()> {
+fn build_mosaic(squares: Vec<(DynamicImage, Rgba<u8>)>) -> Result<()> {
     fs::create_dir_all("./output")?;
-    for (i, square) in squares.iter().enumerate() {
+    for (i, (square, _rgba)) in squares.iter().enumerate() {
         let output_name = format!("./output/img-{i}.png");
         square.save(&output_name)?;
         print!("\rsaved {output_name}{CLEAR_LINE}");
