@@ -94,9 +94,15 @@ fn build_mosaic(mut tiles: Vec<Tile>) -> Result<()> {
         })
         .collect();
 
-    let mut used = vec![false; cells.len()];
-    for tile in tiles {
-        insert_tile(&mut canvas, &mut used, &cells, tile);
+    let assignment = auction_assign(&tiles, &cells);
+
+    for (tile, &cell_idx) in tiles.iter().zip(assignment.iter()) {
+        let cell = cells[cell_idx];
+
+        let px = cell.x * TILE_SIZE;
+        let py = cell.y * TILE_SIZE;
+
+        overlay(&mut canvas, &tile.scaled, px.into(), py.into());
     }
 
     canvas.save(OUTPUT_PATH)?;
@@ -105,37 +111,51 @@ fn build_mosaic(mut tiles: Vec<Tile>) -> Result<()> {
     Ok(())
 }
 
-fn insert_tile(
-    canvas: &mut image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
-    used: &mut Vec<bool>,
-    cells: &[Cell],
-    tile: Tile,
-) {
-    let mut best_i = None;
-    let mut best_d = f32::MAX;
-    for (i, cell) in cells.iter().enumerate() {
-        if (*used)[i] {
-            continue;
+fn auction_assign(tiles: &[Tile], cells: &[Cell]) -> Vec<usize> {
+    let n = tiles.len();
+    let mut prices = vec![0.0f32; cells.len()];
+    let mut assignment = vec![None; n];
+    let mut cell_owner = vec![None; cells.len()];
+
+    let epsilon = 0.01;
+    let mut unassigned: Vec<usize> = (0..n).collect();
+
+    while let Some(i) = unassigned.pop() {
+        let tile = &tiles[i];
+        let mut best_j = 0;
+        let mut best_val = f32::NEG_INFINITY;
+        let mut second_val = f32::NEG_INFINITY;
+
+        for (j, cell) in cells.iter().enumerate() {
+            let d = dist(tile.hue, tile.light, cell.hue, cell.light);
+            let val = -d - prices[j];
+            if val > best_val {
+                second_val = best_val;
+                best_val = val;
+                best_j = j;
+            } else if val > second_val {
+                second_val = val;
+            }
         }
-        let d = dist(tile.hue, tile.light, cell.hue, cell.light);
-        if d < best_d {
-            best_d = d;
-            best_i = Some(i);
+
+        let bid = best_val - second_val + epsilon;
+        prices[best_j] += bid;
+
+        if let Some(prev_tile) = cell_owner[best_j] {
+            assignment[prev_tile] = None;
+            unassigned.push(prev_tile);
         }
+
+        assignment[i] = Some(best_j);
+        cell_owner[best_j] = Some(i);
     }
 
-    let i = best_i.unwrap();
-    (*used)[i] = true;
-
-    let cell = cells[i];
-    let px = cell.x * TILE_SIZE;
-    let py = cell.y * TILE_SIZE;
-    overlay(canvas, &tile.scaled, px.into(), py.into());
+    assignment.into_iter().map(|x| x.unwrap()).collect()
 }
 
 fn dist(a_hue: f32, a_light: f32, b_hue: f32, b_light: f32) -> f32 {
     let dist_hue = (a_hue - b_hue).abs();
     let dist_hue = dist_hue.min(1.0 - dist_hue);
     let dist_light = a_light - b_light;
-    dist_hue * dist_hue + dist_light * dist_light * 8.0
+    dist_hue * dist_hue + dist_light * dist_light
 }
