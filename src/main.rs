@@ -9,7 +9,7 @@ use image::{DynamicImage, GenericImageView, ImageReader, imageops::FilterType};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 const CLEAR_LINE: &str = "\x1b[K";
-const IMG_SIZE: u32 = 100;
+const TILE_SIZE: u32 = 100;
 
 fn main() -> Result<()> {
     let img_dir = args().skip(1).next().unwrap_or(String::from("./img"));
@@ -30,8 +30,8 @@ fn process_dir_entry(entry: &DirEntry) -> Result<DynamicImage> {
     print!("\r{path:?} : cropped to {dim}x{dim}{CLEAR_LINE}");
     stdout().flush()?;
 
-    let scaled = cropped.resize_exact(IMG_SIZE, IMG_SIZE, FilterType::Lanczos3);
-    print!("\r{path:?} : scaled to {IMG_SIZE}x{IMG_SIZE}{CLEAR_LINE}");
+    let scaled = cropped.resize_exact(TILE_SIZE, TILE_SIZE, FilterType::Lanczos3);
+    print!("\r{path:?} : scaled to {TILE_SIZE}x{TILE_SIZE}{CLEAR_LINE}");
     stdout().flush()?;
 
     Ok(scaled)
