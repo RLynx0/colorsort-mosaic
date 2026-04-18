@@ -133,9 +133,9 @@ fn insert_tile(
     overlay(canvas, &tile.scaled, px.into(), py.into());
 }
 
-fn dist(a_h: f32, a_l: f32, b_h: f32, b_l: f32) -> f32 {
-    let dh = (a_h - b_h).abs();
-    let dh = dh.min(1.0 - dh);
-    let dl = a_l - b_l;
-    dh * dh * 2.0 + dl * dl
+fn dist(a_hue: f32, a_light: f32, b_hue: f32, b_light: f32) -> f32 {
+    let dist_hue = (a_hue - b_hue).abs();
+    let dist_hue = dist_hue.min(1.0 - dist_hue);
+    let dist_light = a_light - b_light;
+    dist_hue * dist_hue * 2.0 + dist_light * dist_light
 }
