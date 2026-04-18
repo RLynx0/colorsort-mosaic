@@ -48,11 +48,14 @@ fn process_dir_entry(entry: &DirEntry) -> Result<Tile> {
 
     let single_pixel = scaled.resize_exact(1, 1, FilterType::Lanczos3);
     let (_, _, rgba) = single_pixel.pixels().next().unwrap();
-    let lab = Lab::from_color(Srgb::new(
-        rgba[0] as f32 / 255.0,
-        rgba[1] as f32 / 255.0,
-        rgba[2] as f32 / 255.0,
-    ));
+    let lab = Lab::from_color(
+        Srgb::new(
+            rgba[0] as f32 / 255.0,
+            rgba[1] as f32 / 255.0,
+            rgba[2] as f32 / 255.0,
+        )
+        .into_linear(),
+    );
 
     let light = lab.l / 100.0;
     let hue_radians = lab.b.atan2(lab.a);
