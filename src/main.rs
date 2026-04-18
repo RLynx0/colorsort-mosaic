@@ -16,6 +16,7 @@ fn main() -> anyhow::Result<()> {
     let process_results = dir_entries.par_iter().map(process_dir_entry);
     let processed_images = process_results.collect::<Result<Vec<_>, _>>()?;
     println!("\r{CLEAR_LINE}Processed {} images", processed_images.len());
+    build_mosaic(processed_images);
     Ok(())
 }
 
@@ -34,4 +35,9 @@ fn process_dir_entry(entry: &DirEntry) -> anyhow::Result<DynamicImage> {
     stdout().flush()?;
 
     Ok(scaled)
+}
+
+fn build_mosaic(squares: Vec<DynamicImage>) {
+    let dim = (squares.len() as f64).sqrt().ceil() as u64;
+    println!("Would try to construct {dim}x{dim} mosaic");
 }
