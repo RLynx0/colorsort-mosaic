@@ -109,28 +109,30 @@ fn build_mosaic(mut tiles: Vec<Tile>) -> Result<()> {
 }
 
 fn find_grid(n: u32) -> (u32, u32) {
-    let mut best_w = n;
-    let mut best_h = 1;
+    let mut best_a = n;
+    let mut best_b = 1;
     let mut best_score = f32::INFINITY;
     let sqrt = (n as f32).sqrt() as u32;
 
-    for w in 1..=sqrt * 2 {
-        let h = (n + w - 1) / w;
-        let area = w * h;
+    for a in 1..=sqrt * 2 {
+        let b = (n + a - 1) / a;
+        let area = a * b;
         let waste = (area - n) as f32;
 
-        let aspect = w as f32 / h as f32;
+        let aspect = a as f32 / b as f32;
         let aspect_penalty = (aspect.ln()).abs(); // prefers ~1.0
         let score = waste * 2.0 + aspect_penalty * 10.0;
 
         if score < best_score {
             best_score = score;
-            best_w = w;
-            best_h = h;
+            best_a = a;
+            best_b = b;
         }
     }
 
-    (best_w, best_h)
+    let width = u32::max(best_a, best_b);
+    let height = u32::min(best_a, best_b);
+    (width, height)
 }
 
 fn auction_assign(tiles: &[Tile], cells: &[Cell]) -> Vec<usize> {
