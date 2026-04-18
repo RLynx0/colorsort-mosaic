@@ -137,5 +137,5 @@ fn dist(a_hue: f32, a_light: f32, b_hue: f32, b_light: f32) -> f32 {
     let dist_hue = (a_hue - b_hue).abs();
     let dist_hue = dist_hue.min(1.0 - dist_hue);
     let dist_light = a_light - b_light;
-    dist_hue * dist_hue * 2.0 + dist_light * dist_light
+    dist_hue * dist_hue + dist_light * dist_light * 8.0
 }
