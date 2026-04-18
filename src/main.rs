@@ -15,7 +15,7 @@ fn main() -> anyhow::Result<()> {
         .map(process_entry)
         .collect::<Result<Vec<_>, _>>()?;
 
-    println!("\r\x1b[KGot {} images", cropped_images.len());
+    println!("\r\x1b[KProcessed {} images", cropped_images.len());
     Ok(())
 }
 
@@ -23,7 +23,7 @@ fn process_entry(entry: &DirEntry) -> anyhow::Result<DynamicImage> {
     let path = entry.path();
     let image = ImageReader::open(&path)?.with_guessed_format()?.decode()?;
     let (width, height) = image.dimensions();
-    let dim = u32::max(width, height);
+    let dim = u32::min(width, height);
     let cropped = image.crop_imm((width - dim) / 2, (height - dim) / 2, dim, dim);
     print!("\r{path:?} : cropped to {dim}x{dim}\x1b[K");
     stdout().flush()?;
