@@ -75,7 +75,7 @@ struct Cell {
 }
 
 fn build_mosaic(mut tiles: Vec<Tile>) -> Result<()> {
-    tiles.sort_by(|a, b| a.light.partial_cmp(&b.light).unwrap());
+    tiles.sort_by(|a, b| b.light.partial_cmp(&a.light).unwrap());
 
     let count = tiles.len() as u32;
     let width_tiles = (count as f32).sqrt().ceil() as u32;
