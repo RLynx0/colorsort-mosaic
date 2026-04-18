@@ -6,7 +6,10 @@ use std::{
 };
 
 use anyhow::Result;
-use image::{DynamicImage, GenericImageView, ImageReader, imageops::FilterType};
+use image::{
+    DynamicImage, GenericImageView, ImageReader,
+    imageops::{FilterType, overlay},
+};
 use palette::{FromColor, Lab, Srgb};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
@@ -24,7 +27,7 @@ fn main() -> Result<()> {
 }
 
 struct Tile {
-    image: DynamicImage,
+    scaled: DynamicImage,
     light: f32,
     hue: f32,
 }
@@ -57,20 +60,79 @@ fn process_dir_entry(entry: &DirEntry) -> Result<Tile> {
     print!("\r{path:?} : hue:{hue} light:{light}{CLEAR_LINE}");
     stdout().flush()?;
 
-    Ok(Tile { image, light, hue })
+    Ok(Tile { scaled, light, hue })
 }
 
-fn build_mosaic(squares: Vec<Tile>) -> Result<()> {
-    let count = squares.len() as u32;
+#[derive(Clone, Copy)]
+struct Cell {
+    x: u32,
+    y: u32,
+    hue: f32,
+    light: f32,
+}
+
+fn build_mosaic(mut tiles: Vec<Tile>) -> Result<()> {
+    tiles.sort_by(|a, b| a.light.partial_cmp(&b.light).unwrap());
+
+    let count = tiles.len() as u32;
     let width_tiles = (count as f32).sqrt().ceil() as u32;
     let height_tiles = width_tiles;
 
     let width_px = width_tiles * TILE_SIZE;
     let height_px = height_tiles * TILE_SIZE;
-    let canvas = image::RgbaImage::new(width_px, height_px);
+    let mut canvas = image::RgbaImage::new(width_px, height_px);
+
+    let cells: Vec<Cell> = (0..width_tiles)
+        .flat_map(|x| (0..height_tiles).map(move |y| (x, y)))
+        .map(|(x, y)| {
+            let hue = x as f32 / (width_tiles - 1) as f32;
+            let light = y as f32 / (height_tiles - 1) as f32;
+            Cell { x, y, hue, light }
+        })
+        .collect();
+
+    let mut used = vec![false; cells.len()];
+    for tile in tiles {
+        insert_tile(&mut canvas, &mut used, &cells, tile);
+    }
 
     canvas.save(OUTPUT_PATH)?;
     println!("Saved {OUTPUT_PATH}");
 
     Ok(())
+}
+
+fn insert_tile(
+    canvas: &mut image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
+    used: &mut Vec<bool>,
+    cells: &[Cell],
+    tile: Tile,
+) {
+    let mut best_i = None;
+    let mut best_d = f32::MAX;
+    for (i, cell) in cells.iter().enumerate() {
+        if (*used)[i] {
+            continue;
+        }
+        let d = dist(tile.hue, tile.light, cell.hue, cell.light);
+        if d < best_d {
+            best_d = d;
+            best_i = Some(i);
+        }
+    }
+
+    let i = best_i.unwrap();
+    (*used)[i] = true;
+
+    let cell = cells[i];
+    let px = cell.x * TILE_SIZE;
+    let py = cell.y * TILE_SIZE;
+    overlay(canvas, &tile.scaled, px.into(), py.into());
+}
+
+fn dist(a_h: f32, a_l: f32, b_h: f32, b_l: f32) -> f32 {
+    let dh = (a_h - b_h).abs();
+    let dh = dh.min(1.0 - dh);
+    let dl = a_l - b_l;
+    dh * dh + dl * dl
 }
