@@ -4,23 +4,23 @@ use std::{
     io::{Write, stdout},
 };
 
+use anyhow::Result;
 use image::{DynamicImage, GenericImageView, ImageReader, imageops::FilterType};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 const CLEAR_LINE: &str = "\x1b[K";
 const IMG_SIZE: u32 = 100;
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
     let img_dir = args().skip(1).next().unwrap_or(String::from("./img"));
     let dir_entries = fs::read_dir(img_dir)?.collect::<Result<Vec<_>, _>>()?;
     let process_results = dir_entries.par_iter().map(process_dir_entry);
     let processed_images = process_results.collect::<Result<Vec<_>, _>>()?;
     println!("\r{CLEAR_LINE}Processed {} images", processed_images.len());
-    build_mosaic(processed_images);
-    Ok(())
+    build_mosaic(processed_images)
 }
 
-fn process_dir_entry(entry: &DirEntry) -> anyhow::Result<DynamicImage> {
+fn process_dir_entry(entry: &DirEntry) -> Result<DynamicImage> {
     let path = entry.path();
     let image = ImageReader::open(&path)?.with_guessed_format()?.decode()?;
     let (width, height) = image.dimensions();
@@ -37,7 +37,16 @@ fn process_dir_entry(entry: &DirEntry) -> anyhow::Result<DynamicImage> {
     Ok(scaled)
 }
 
-fn build_mosaic(squares: Vec<DynamicImage>) {
+fn build_mosaic(squares: Vec<DynamicImage>) -> Result<()> {
+    fs::create_dir_all("./output")?;
+    for (i, square) in squares.iter().enumerate() {
+        let output_name = format!("./output/img-{i}.png");
+        square.save(&output_name)?;
+        print!("\rsaved {output_name}{CLEAR_LINE}");
+        stdout().flush()?;
+    }
+
     let dim = (squares.len() as f64).sqrt().ceil() as u64;
-    println!("Would try to construct {dim}x{dim} mosaic");
+    println!("\r{CLEAR_LINE}Would try to construct {dim}x{dim} mosaic");
+    Ok(())
 }
