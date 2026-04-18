@@ -180,5 +180,5 @@ fn auction_assign(tiles: &[Tile], cells: &[Cell]) -> Vec<usize> {
 fn dist(a_hue: f32, a_light: f32, b_hue: f32, b_light: f32) -> f32 {
     let dh = (a_hue - b_hue).abs().min(1.0 - (a_hue - b_hue).abs());
     let dl = a_light - b_light;
-    dl * dl * 6.0 + dh * dh
+    dl * dl + dh * dh
 }
