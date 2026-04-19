@@ -1,29 +1,34 @@
 use std::{
+    cmp::Ordering,
     env::args,
     f32::consts::PI,
-    fs::{self, DirEntry},
+    fs::{DirEntry, read_dir},
     io::{Write, stdout},
 };
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use image::{
-    DynamicImage, GenericImageView, ImageReader,
+    DynamicImage, GenericImageView, ImageReader, RgbaImage,
     imageops::{FilterType, overlay},
 };
 use palette::{FromColor, Lab, Srgb};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
+const DEFAULT_DIR: &str = "./img";
 const OUTPUT_PATH: &str = "mosaic.png";
 const CLEAR_LINE: &str = "\x1b[K";
 const TILE_SIZE: u32 = 50;
 
 fn main() -> Result<()> {
-    let img_dir = args().nth(1).unwrap_or(String::from("./img"));
-    let dir_entries = fs::read_dir(img_dir)?.collect::<Result<Vec<_>, _>>()?;
+    let img_dir = args().nth(1).unwrap_or(DEFAULT_DIR.to_owned());
+    let dir_entries = read_dir(img_dir)?.collect::<Result<Vec<_>, _>>()?;
     let process_results = dir_entries.par_iter().map(process_dir_entry);
     let processed_images = process_results.collect::<Result<Vec<_>, _>>()?;
     println!("\r{CLEAR_LINE}Processed {} images", processed_images.len());
-    build_mosaic(processed_images)
+
+    build_mosaic(processed_images)?.save(OUTPUT_PATH)?;
+    println!("Saved {OUTPUT_PATH}");
+    Ok(())
 }
 
 struct Tile {
@@ -47,7 +52,7 @@ fn process_dir_entry(entry: &DirEntry) -> Result<Tile> {
     stdout().flush()?;
 
     let single_pixel = scaled.resize_exact(1, 1, FilterType::Lanczos3);
-    let (_, _, rgba) = single_pixel.pixels().next().unwrap();
+    let (_, _, rgba) = single_pixel.pixels().next().ok_or(anyhow!("0px"))?;
     let lab = Lab::from_color(
         Srgb::new(
             rgba[0] as f32 / 255.0,
@@ -74,14 +79,15 @@ struct Cell {
     light: f32,
 }
 
-fn build_mosaic(mut tiles: Vec<Tile>) -> Result<()> {
-    tiles.sort_by(|a, b| a.light.partial_cmp(&b.light).unwrap());
+fn build_mosaic(mut tiles: Vec<Tile>) -> Result<RgbaImage> {
+    tiles.sort_by(|a, b| a.light.partial_cmp(&b.light).unwrap_or(Ordering::Equal));
     let (width_tiles, height_tiles) = find_grid(tiles.len() as u32);
-
     let width_px = width_tiles * TILE_SIZE;
     let height_px = height_tiles * TILE_SIZE;
-    let mut canvas = image::RgbaImage::new(width_px, height_px);
+    println!("Creating mosaic with {width_tiles}x{height_tiles} tiles");
+    println!("Total size: {width_px}x{height_px} px");
 
+    let mut canvas = RgbaImage::new(width_px, height_px);
     let cells: Vec<Cell> = (0..width_tiles)
         .flat_map(|x| (0..height_tiles).map(move |y| (x, y)))
         .map(|(x, y)| {
@@ -92,7 +98,6 @@ fn build_mosaic(mut tiles: Vec<Tile>) -> Result<()> {
         .collect();
 
     let assignment = auction_assign(&tiles, &cells);
-
     for (tile, &cell_idx) in tiles.iter().zip(assignment.iter()) {
         let cell = cells[cell_idx];
 
@@ -102,10 +107,7 @@ fn build_mosaic(mut tiles: Vec<Tile>) -> Result<()> {
         overlay(&mut canvas, &tile.scaled, px.into(), py.into());
     }
 
-    canvas.save(OUTPUT_PATH)?;
-    println!("Saved {OUTPUT_PATH}");
-
-    Ok(())
+    Ok(canvas)
 }
 
 fn find_grid(n: u32) -> (u32, u32) {
@@ -115,7 +117,7 @@ fn find_grid(n: u32) -> (u32, u32) {
     let sqrt = (n as f32).sqrt() as u32;
 
     for a in 1..=sqrt * 2 {
-        let b = (n + a - 1) / a;
+        let b = n.div_ceil(a);
         let area = a * b;
         let waste = (area - n) as f32;
 
@@ -174,7 +176,7 @@ fn auction_assign(tiles: &[Tile], cells: &[Cell]) -> Vec<usize> {
         cell_owner[best_j] = Some(i);
     }
 
-    assignment.into_iter().map(|x| x.unwrap()).collect()
+    assignment.into_iter().flatten().collect()
 }
 
 fn dist(a_hue: f32, a_light: f32, b_hue: f32, b_light: f32) -> f32 {
