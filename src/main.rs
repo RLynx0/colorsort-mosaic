@@ -20,9 +20,9 @@ const CLEAR_LINE: &str = "\x1b[K";
 #[derive(clap::Parser)]
 struct Cli {
     /// Path to the input image directory
-    img_dir: PathBuf,
+    img_dir: Vec<PathBuf>,
     /// Path of the output file
-    #[arg(default_value = "./mosaic.png")]
+    #[arg(short, long, default_value = "./mosaic.png")]
     output: PathBuf,
     /// Size of each mosaic tile in pixels
     #[arg(short, long, default_value_t = 50)]
@@ -31,7 +31,9 @@ struct Cli {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let dir_entries = read_dir(cli.img_dir)?.collect::<Result<Vec<_>, _>>()?;
+    let dir_results = cli.img_dir.iter().map(read_dir);
+    let dirs = dir_results.collect::<Result<Vec<_>, _>>()?;
+    let dir_entries = dirs.into_iter().flatten().collect::<Result<Vec<_>, _>>()?;
     let images = dir_entries.par_iter().map(image_from_dir_entry).flatten();
     let process_results = images.map(|(i, p)| process_image(i, &p, cli.size));
     let processed_tiles = process_results.collect::<Result<Vec<_>, _>>()?;
