@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.102"
+clap = { version = "4.6.1", features = ["derive"] }
 image = "0.25.10"
 palette = "0.7.6"
 rayon = "1.12.0"

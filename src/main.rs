@@ -1,12 +1,13 @@
 use std::{
     cmp::Ordering,
-    env::args,
     f32::consts::PI,
     fs::{DirEntry, read_dir},
     io::{Write, stdout},
+    path::PathBuf,
 };
 
 use anyhow::{Result, anyhow};
+use clap::Parser;
 use image::{
     DynamicImage, GenericImageView, ImageReader, RgbaImage,
     imageops::{FilterType, overlay},
@@ -14,21 +15,41 @@ use image::{
 use palette::{FromColor, Lab, Srgb};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-const DEFAULT_DIR: &str = "./img";
-const OUTPUT_PATH: &str = "mosaic.png";
 const CLEAR_LINE: &str = "\x1b[K";
-const TILE_SIZE: u32 = 50;
+
+#[derive(clap::Parser)]
+struct Cli {
+    /// Path to the input image directory
+    img_dir: PathBuf,
+    /// Path of the output file
+    #[arg(default_value = "./mosaic.png")]
+    output: PathBuf,
+    /// Size of each mosaic tile in pixels
+    #[arg(short, long, default_value_t = 50)]
+    size: u32,
+}
 
 fn main() -> Result<()> {
-    let img_dir = args().nth(1).unwrap_or(DEFAULT_DIR.to_owned());
-    let dir_entries = read_dir(img_dir)?.collect::<Result<Vec<_>, _>>()?;
-    let process_results = dir_entries.par_iter().map(process_dir_entry);
-    let processed_images = process_results.collect::<Result<Vec<_>, _>>()?;
-    println!("\r{CLEAR_LINE}Processed {} images", processed_images.len());
+    let cli = Cli::parse();
+    let dir_entries = read_dir(cli.img_dir)?.collect::<Result<Vec<_>, _>>()?;
+    let images = dir_entries.par_iter().map(image_from_dir_entry).flatten();
+    let process_results = images.map(|(i, p)| process_image(i, &p, cli.size));
+    let processed_tiles = process_results.collect::<Result<Vec<_>, _>>()?;
+    if processed_tiles.is_empty() {
+        return Err(anyhow!("Exiting because no images where found"));
+    }
 
-    build_mosaic(processed_images)?.save(OUTPUT_PATH)?;
-    println!("Saved {OUTPUT_PATH}");
+    println!("\r{CLEAR_LINE}Processed {} images", processed_tiles.len());
+
+    build_mosaic(processed_tiles, cli.size)?.save(&cli.output)?;
+    println!("Saved {:?}", cli.output);
     Ok(())
+}
+
+fn image_from_dir_entry(entry: &DirEntry) -> Result<(DynamicImage, PathBuf)> {
+    let path = entry.path();
+    let image = ImageReader::open(&path)?.with_guessed_format()?.decode()?;
+    Ok((image, path))
 }
 
 struct Tile {
@@ -37,9 +58,7 @@ struct Tile {
     hue: f32,
 }
 
-fn process_dir_entry(entry: &DirEntry) -> Result<Tile> {
-    let path = entry.path();
-    let image = ImageReader::open(&path)?.with_guessed_format()?.decode()?;
+fn process_image(image: DynamicImage, path: &PathBuf, tile_size: u32) -> Result<Tile> {
     let (width, height) = image.dimensions();
     let dim = u32::min(width, height);
 
@@ -47,8 +66,8 @@ fn process_dir_entry(entry: &DirEntry) -> Result<Tile> {
     print!("\r{path:?} : cropped to {dim}x{dim}{CLEAR_LINE}");
     stdout().flush()?;
 
-    let scaled = cropped.resize_exact(TILE_SIZE, TILE_SIZE, FilterType::Lanczos3);
-    print!("\r{path:?} : scaled to {TILE_SIZE}x{TILE_SIZE}{CLEAR_LINE}");
+    let scaled = cropped.resize_exact(tile_size, tile_size, FilterType::Lanczos3);
+    print!("\r{path:?} : scaled to {tile_size}x{tile_size}{CLEAR_LINE}");
     stdout().flush()?;
 
     let single_pixel = scaled.resize_exact(1, 1, FilterType::Lanczos3);
@@ -79,11 +98,11 @@ struct Cell {
     light: f32,
 }
 
-fn build_mosaic(mut tiles: Vec<Tile>) -> Result<RgbaImage> {
+fn build_mosaic(mut tiles: Vec<Tile>, tile_size: u32) -> Result<RgbaImage> {
     tiles.sort_by(|a, b| a.light.partial_cmp(&b.light).unwrap_or(Ordering::Equal));
     let (width_tiles, height_tiles) = find_grid(tiles.len() as u32);
-    let width_px = width_tiles * TILE_SIZE;
-    let height_px = height_tiles * TILE_SIZE;
+    let width_px = width_tiles * tile_size;
+    let height_px = height_tiles * tile_size;
     println!("Creating mosaic with {width_tiles}x{height_tiles} tiles");
     println!("Total size: {width_px}x{height_px} px");
 
@@ -101,8 +120,8 @@ fn build_mosaic(mut tiles: Vec<Tile>) -> Result<RgbaImage> {
     for (tile, &cell_idx) in tiles.iter().zip(assignment.iter()) {
         let cell = cells[cell_idx];
 
-        let px = cell.x * TILE_SIZE;
-        let py = cell.y * TILE_SIZE;
+        let px = cell.x * tile_size;
+        let py = cell.y * tile_size;
 
         overlay(&mut canvas, &tile.scaled, px.into(), py.into());
     }
