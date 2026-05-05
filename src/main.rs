@@ -4,6 +4,7 @@ use std::{
     fs::{DirEntry, read_dir},
     io::{Write, stdout},
     path::PathBuf,
+    sync::{Arc, Mutex},
 };
 
 use anyhow::{Result, anyhow};
@@ -34,9 +35,10 @@ fn main() -> Result<()> {
     let dir_results = cli.img_dir.iter().map(read_dir);
     let dirs = dir_results.collect::<Result<Vec<_>, _>>()?;
     let dir_entries = dirs.into_iter().flatten().collect::<Result<Vec<_>, _>>()?;
-    let images = dir_entries.par_iter().map(image_from_dir_entry).flatten();
-    let process_results = images.map(|(i, p)| process_image(i, &p, cli.size));
-    let processed_tiles = process_results.collect::<Result<Vec<_>, _>>()?;
+    let (n, a) = (dir_entries.len(), Arc::new(Mutex::new(0)));
+    let imgs = dir_entries.par_iter().map(image_from_dir_entry).flatten();
+    let proc_results = imgs.map(|(i, p)| process_img(i, &p, cli.size, a.clone(), n));
+    let processed_tiles = proc_results.collect::<Result<Vec<_>, _>>()?;
     if processed_tiles.is_empty() {
         return Err(anyhow!("Exiting because no images where found"));
     }
@@ -60,17 +62,27 @@ struct Tile {
     hue: f32,
 }
 
-fn process_image(image: DynamicImage, path: &PathBuf, tile_size: u32) -> Result<Tile> {
+fn process_img(
+    image: DynamicImage,
+    path: &PathBuf,
+    tile_size: u32,
+    n_done: Arc<Mutex<u32>>,
+    n_total: usize,
+) -> Result<Tile> {
     let (width, height) = image.dimensions();
     let dim = u32::min(width, height);
 
     let cropped = image.crop_imm((width - dim) / 2, (height - dim) / 2, dim, dim);
-    print!("\r{path:?} : cropped to {dim}x{dim}{CLEAR_LINE}");
+    let n = n_done.lock().unwrap();
+    print!("\r[{n}/{n_total}] {path:?} : cropped to {dim}x{dim}{CLEAR_LINE}");
     stdout().flush()?;
+    drop(n);
 
     let scaled = cropped.resize_exact(tile_size, tile_size, FilterType::Lanczos3);
-    print!("\r{path:?} : scaled to {tile_size}x{tile_size}{CLEAR_LINE}");
+    let n = n_done.lock().unwrap();
+    print!("\r[{n}/{n_total}] {path:?} : scaled to {tile_size}x{tile_size}{CLEAR_LINE}");
     stdout().flush()?;
+    drop(n);
 
     let single_pixel = scaled.resize_exact(1, 1, FilterType::Lanczos3);
     let (_, _, rgba) = single_pixel.pixels().next().ok_or(anyhow!("0px"))?;
@@ -86,8 +98,10 @@ fn process_image(image: DynamicImage, path: &PathBuf, tile_size: u32) -> Result<
     let light = lab.l / 100.0;
     let hue_radians = lab.b.atan2(lab.a);
     let hue = (hue_radians + PI) / (2.0 * PI);
-    print!("\r{path:?} : hue:{hue} light:{light}{CLEAR_LINE}");
+    let mut n = n_done.lock().unwrap();
+    print!("\r[{n}/{n_total}] {path:?} : hue:{hue} light:{light}{CLEAR_LINE}");
     stdout().flush()?;
+    *n += 1;
 
     Ok(Tile { scaled, light, hue })
 }
