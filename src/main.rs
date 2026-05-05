@@ -73,13 +73,13 @@ fn process_img(
     let dim = u32::min(width, height);
 
     let cropped = image.crop_imm((width - dim) / 2, (height - dim) / 2, dim, dim);
-    let n = n_done.lock().unwrap();
+    let n = n_done.lock().map_err(|_| anyhow!("Failed to lock mutex"))?;
     print!("\r[{n}/{n_total}] {path:?} : cropped to {dim}x{dim}{CLEAR_LINE}");
     stdout().flush()?;
     drop(n);
 
     let scaled = cropped.resize_exact(tile_size, tile_size, FilterType::Lanczos3);
-    let n = n_done.lock().unwrap();
+    let n = n_done.lock().map_err(|_| anyhow!("Failed to lock mutex"))?;
     print!("\r[{n}/{n_total}] {path:?} : scaled to {tile_size}x{tile_size}{CLEAR_LINE}");
     stdout().flush()?;
     drop(n);
@@ -98,7 +98,7 @@ fn process_img(
     let light = lab.l / 100.0;
     let hue_radians = lab.b.atan2(lab.a);
     let hue = (hue_radians + PI) / (2.0 * PI);
-    let mut n = n_done.lock().unwrap();
+    let mut n = n_done.lock().map_err(|_| anyhow!("Failed to lock mutex"))?;
     print!("\r[{n}/{n_total}] {path:?} : hue:{hue} light:{light}{CLEAR_LINE}");
     stdout().flush()?;
     *n += 1;
